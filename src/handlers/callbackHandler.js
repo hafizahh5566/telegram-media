@@ -36,7 +36,7 @@ const {
   handleBulkCategorySelect,
   handleBulkSendAll,
   handleConfirmBulkSend,
-} = require('../commands/bulkSendCommand');
+} = require('../commands/bulksendCommand');
 
 // Track media messages sent inside category views, keyed by userId
 const categoryViewMessages = new Map();

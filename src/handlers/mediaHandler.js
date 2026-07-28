@@ -338,7 +338,7 @@ async function handleTextForMediaName(ctx) {
   
   // Check if user is adding to whitelist
   const { handleWhitelistInput, handleForwardedMessage } = require('./whitelistHandler');
-  const { handleBulkSendChatIds } = require('../commands/bulkSendCommand');
+  const { handleBulkSendChatIds } = require('../commands/bulksendCommand');
   
   // Check if it's a forwarded message for whitelist
   if (ctx.message.forward_from_chat || ctx.message.forward_from) {
