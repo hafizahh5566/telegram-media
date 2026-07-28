@@ -1,0 +1,23 @@
+{
+  "name": "telegram-media-storage",
+  "version": "1.0.0",
+  "description": "Telegram Media Storage Bot - Store and resend media using file_id",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "dev": "node --watch src/bot.js"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "media",
+    "storage"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "telegraf": "^4.16.3",
+    "better-sqlite3": "^11.5.0",
+    "dotenv": "^16.4.5"
+  }
+}

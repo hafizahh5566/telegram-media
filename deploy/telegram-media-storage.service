@@ -1,0 +1,37 @@
+[Unit]
+Description=Telegram Media Storage Bot
+Documentation=https://github.com/your-username/telegram-media-storage
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Change this user/group to the Linux user that owns the project on your VPS.
+User=telegrambot
+Group=telegrambot
+
+# Change this path to the absolute project directory on your VPS.
+WorkingDirectory=/opt/telegram-media-storage
+
+# If your Node.js binary is not /usr/bin/node, check it with: which node
+ExecStart=/usr/bin/node src/bot.js
+
+Environment=NODE_ENV=production
+
+# Keep the bot alive if it crashes or the VPS reboots.
+Restart=always
+RestartSec=5
+
+# Let the app handle SIGTERM and close SQLite cleanly.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Log to journald. View logs with:
+# journalctl -u telegram-media-storage -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=telegram-media-storage
+
+[Install]
+WantedBy=multi-user.target

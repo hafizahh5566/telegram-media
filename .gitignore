@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# SQLite database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+*.sqlite3-shm
+*.sqlite3-wal
+*.sqlite3-journal
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime / process files
+*.pid
+*.seed
+*.pid.lock
+
+# Build / coverage / cache
+dist/
+build/
+coverage/
+.nyc_output/
+.cache/
+.npm/
+.eslintcache
+
+# Local backups / temporary files
+*.bak
+*.bak2
+*.tmp
+*.temp
+tmp/
+temp/
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+!.vscode/extensions.json
