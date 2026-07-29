@@ -245,6 +245,52 @@ async function handleCategoryNameInput(ctx) {
       await ctx.reply(`❌ Category "${categoryName}" already exists. Please choose a different name:`);
       return true;
     }
+
+    // If this category is being created from the media upload flow,
+    // create the category and save the pending media into it immediately.
+    if (categoryState.mediaName) {
+      const mediaData = pendingMedia.get(userId);
+
+      if (!mediaData || mediaData.name !== categoryState.mediaName) {
+        pendingCategoryCreation.delete(userId);
+        await ctx.reply('❌ Media data not found. Please upload again.');
+        return true;
+      }
+
+      const counter = MediaService.getNextCounterForCategory(categoryName);
+      const finalName = `${categoryName}_${counter}`;
+
+      mediaData.category = categoryName;
+      mediaData.name = finalName;
+
+      const savedName = MediaService.saveMedia(mediaData);
+
+      pendingMedia.delete(userId);
+      pendingCategoryCreation.delete(userId);
+
+      const actionButtons = Markup.inlineKeyboard([
+        [
+          Markup.button.callback('📤 Upload Another', `upload_to_${categoryName}`),
+          Markup.button.callback('📁 View Category', `show_cat_${categoryName}`)
+        ],
+        [Markup.button.callback('🏠 Main Menu', 'main_menu')]
+      ]);
+
+      await ctx.reply(
+        `✅ Category "${categoryName}" created successfully!\n\n` +
+        `✅ *Media Saved to Category: ${categoryName}*\n\n` +
+        `*Name:* \`${savedName}\`\n` +
+        `*Type:* ${mediaData.media_type}\n\n` +
+        `What would you like to do?`,
+        {
+          parse_mode: 'Markdown',
+          ...actionButtons
+        }
+      );
+
+      Logger.info(`New category "${categoryName}" created with media ${savedName} by user ${userId}`);
+      return true;
+    }
     
     // Create a placeholder media to register the new category in database
     // This ensures the category appears in the list even without media

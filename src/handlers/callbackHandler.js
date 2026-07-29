@@ -1290,8 +1290,19 @@ async function handleCallbackQuery(ctx) {
     } else if (data.startsWith('new_cat_')) {
       const mediaName = data.replace('new_cat_', '');
       await ctx.answerCbQuery();
-      await ctx.editMessageText(`➕ Type the new category name for "${mediaName}":`);
-      // User will send text, handler will process it
+
+      const { pendingCategoryCreation } = require('./mediaHandler');
+      pendingCategoryCreation.set(ctx.from.id, { awaiting: true, mediaName });
+
+      await ctx.editMessageText(
+        `➕ *Create New Category*\n\n` +
+        `Type the new category name for this media.\n\n` +
+        `Rules:\n` +
+        `• Use only letters, numbers, underscore (_), or dash (-)\n` +
+        `• No spaces allowed\n` +
+        `• Example: promo_2024 or sales-banner`,
+        { parse_mode: 'Markdown' }
+      );
     }
     // Send to category handler
     else if (data.startsWith('send_to_cat_')) {
