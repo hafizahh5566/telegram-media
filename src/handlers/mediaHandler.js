@@ -80,6 +80,45 @@ function extractMediaData(ctx) {
   return null;
 }
 
+/**
+ * Check whether a message is forwarded. Telegram Bot API newer versions use
+ * `forward_origin`, while older payloads use `forward_date`, `forward_from`,
+ * or `forward_from_chat`.
+ * @param {Object} message - Telegram message
+ * @returns {boolean}
+ */
+function isForwardedMessage(message) {
+  return Boolean(
+    message.forward_origin ||
+    message.forward_date ||
+    message.forward_from ||
+    message.forward_from_chat
+  );
+}
+
+/**
+ * Ensure a category is visible in the category list, even before real media is saved.
+ * @param {string} category - Category name
+ */
+function ensureCategoryExists(category) {
+  const categories = MediaService.getCategories();
+  if (categories.includes(category)) return;
+
+  try {
+    MediaService.saveMedia({
+      name: `_category_placeholder_${category}_${Date.now()}`,
+      file_id: 'placeholder',
+      file_unique_id: `placeholder_${category}_${Date.now()}`,
+      media_type: 'placeholder',
+      caption: `Category placeholder for ${category}`,
+      category: category
+    });
+  } catch (error) {
+    // Ignore if placeholder already exists or category is created concurrently.
+    Logger.warn(`Placeholder for category ${category} may already exist`);
+  }
+}
+
 // Store pending media temporarily (in-memory, simple approach)
 const pendingMedia = new Map();
 
@@ -111,9 +150,10 @@ async function handleMedia(ctx) {
     }
     
     const userId = ctx.from.id;
+    const captionCategory = BulkForwardHandler.extractCategoryFromHashtag(mediaData.caption);
     
     // BULK MODE: Detect forwarded messages and use batch processing
-    if (ctx.message.forward_date || ctx.message.forward_from || ctx.message.forward_from_chat) {
+    if (isForwardedMessage(ctx.message)) {
       // This is a forwarded message - use bulk processing
       BulkForwardHandler.addToBatchQueue(userId, mediaData, ctx);
       return; // Batch handler will process this
@@ -183,6 +223,60 @@ async function handleMedia(ctx) {
       );
       
       Logger.info(`Media ${savedName} saved to category ${targetCategory}`);
+      return;
+    }
+
+    // If media has a caption/message with hashtag (e.g. #kategori), save it
+    // directly into that category. This supports forwarding/sending media with
+    // a category hashtag without needing to tap category buttons manually.
+    if (captionCategory) {
+      ensureCategoryExists(captionCategory);
+
+      const counter = MediaService.getNextCounterForCategory(captionCategory);
+      const finalName = `${captionCategory}_${counter}`;
+
+      mediaData.category = captionCategory;
+      mediaData.name = finalName;
+      mediaData.message_id = ctx.message.message_id;
+      mediaData.chat_id = String(ctx.chat.id);
+      const savedName = MediaService.saveMedia(mediaData);
+
+      // Auto-backup if enabled
+      try {
+        const backupStatus = BackupService.isAutoBackupReady();
+        if (backupStatus.enabled && backupStatus.channelId) {
+          await BackupService.backupMediaToChannel(ctx.telegram, backupStatus.channelId, mediaData);
+          Logger.info(`Auto-backed up media ${savedName} to channel ${backupStatus.channelId}`);
+        }
+      } catch (backupError) {
+        Logger.error(`Auto-backup failed for ${savedName}`, backupError);
+        // Don't fail the whole operation if backup fails
+      }
+
+      pendingMedia.delete(userId);
+
+      const escapedCategory = escapeMarkdown(captionCategory);
+      const actionButtons = Markup.inlineKeyboard([
+        [
+          Markup.button.callback('📤 Upload Another', `upload_to_${captionCategory}`),
+          Markup.button.callback('📁 View Category', `show_cat_${captionCategory}`)
+        ],
+        [Markup.button.callback('🏠 Main Menu', 'main_menu')]
+      ]);
+
+      await ctx.reply(
+        `✅ *Media Saved to Category: ${escapedCategory}*\n\n` +
+        `*Name:* \`${savedName}\`\n` +
+        `*Type:* ${mediaData.media_type}\n\n` +
+        `🏷 Category detected from hashtag in caption/message.`,
+        {
+          parse_mode: 'Markdown',
+          ...actionButtons,
+          reply_to_message_id: ctx.message.message_id
+        }
+      );
+
+      Logger.info(`Media ${savedName} saved to hashtag category ${captionCategory}`);
       return;
     }
     
@@ -762,6 +856,7 @@ module.exports = {
   handleMedia,
   handleTextForMediaName,
   extractMediaData,
+  isForwardedMessage,
   pendingMedia, // Export for callbackHandler
   pendingCategoryCreation, // Export for callbackHandler
   pendingCategoryUpload, // Export for callbackHandler
