@@ -1,10 +1,16 @@
 # Dependencies
 node_modules/
+.pnp.*
 
 # Package manager files
 .npm/
 .yarn/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
 .pnpm-store/
+*.tgz
 
 # Environment variables / secrets
 .env
@@ -50,6 +56,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 *.pid.lock
 .forever/
 .pm2/
+.node_repl_history
 
 # Build / coverage / cache
 dist/
@@ -60,6 +67,7 @@ coverage/
 .eslintcache
 .parcel-cache/
 .turbo/
+*.tsbuildinfo
 
 # Local backups / temporary files
 backups/
