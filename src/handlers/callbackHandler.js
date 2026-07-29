@@ -42,6 +42,16 @@ const {
 const categoryViewMessages = new Map();
 
 /**
+ * Escape Telegram Markdown special characters in dynamic text.
+ * @param {string} text - Text to escape
+ * @returns {string}
+ */
+function escapeMarkdown(text) {
+  if (!text) return '';
+  return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+}
+
+/**
  * Delete tracked category media messages for a user (cleanup when leaving a category)
  * @param {Object} ctx - Telegraf context
  */
@@ -430,7 +440,7 @@ async function handleDeleteCategoryList(ctx, category) {
     if (mediaList.length === 0) {
       // Even if no media, allow deleting the empty category
       await ctx.editMessageText(
-        `📁 *Category: ${category}*\n\n` +
+        `📁 *Category: ${escapeMarkdown(category)}*\n\n` +
         `No media found in this category.\n\n` +
         `You can still delete the empty category if you want.`,
         {
@@ -445,7 +455,7 @@ async function handleDeleteCategoryList(ctx, category) {
       return;
     }
     
-    let message = `🗑 *Delete Media from: ${category}*\n\n`;
+    let message = `🗑 *Delete Media from: ${escapeMarkdown(category)}*\n\n`;
     message += `Total: ${mediaList.length} item(s)\n\n`;
     message += `Select media to delete:\n\n`;
     
@@ -457,15 +467,13 @@ async function handleDeleteCategoryList(ctx, category) {
     
     for (let index = 0; index < displayLimit; index++) {
       const media = mediaList[index];
-      message += `${index + 1}. *${media.name}*\n`;
+      message += `${index + 1}. *${escapeMarkdown(media.name)}*\n`;
       message += `   Type: ${media.media_type}`;
       if (media.caption) {
         const shortCaption = media.caption.length > 30 
           ? media.caption.substring(0, 30) + '...' 
           : media.caption;
-        // Escape markdown special characters in caption
-        const escapedCaption = shortCaption.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
-        message += `\n   Caption: ${escapedCaption}`;
+        message += `\n   Caption: ${escapeMarkdown(shortCaption)}`;
       }
       message += `\n\n`;
       
@@ -633,7 +641,7 @@ async function handleDeleteAllCategory(ctx, category) {
     
     if (mediaList.length === 0) {
       await ctx.editMessageText(
-        `📁 *Category: ${category}*\n\nNo media found.`,
+        `📁 *Category: ${escapeMarkdown(category)}*\n\nNo media found.`,
         {
           parse_mode: 'Markdown',
           ...Markup.inlineKeyboard([
@@ -656,7 +664,7 @@ async function handleDeleteAllCategory(ctx, category) {
     await ctx.editMessageText(
       `⚠️ *Confirm Mass Deletion*\n\n` +
       `Delete ALL media in this category?\n\n` +
-      `*Category:* ${category}\n` +
+      `*Category:* ${escapeMarkdown(category)}\n` +
       `*Total:* ${mediaList.length} items\n\n` +
       `⚠️ Cannot be undone!`,
       {
@@ -755,6 +763,7 @@ async function handleDeleteWholeCategory(ctx, category) {
     ctx.answerCbQuery().catch(() => {});
     
     const mediaList = MediaService.getMediaByCategory(category, 1000).filter(m => m.media_type !== 'placeholder');
+    const escapedCategory = escapeMarkdown(category);
     
     // Show confirmation for both empty and non-empty categories
     const keyboard = Markup.inlineKeyboard([
@@ -767,12 +776,12 @@ async function handleDeleteWholeCategory(ctx, category) {
     const confirmMessage = mediaList.length === 0
       ? `🗑️ *Confirm Empty Category Deletion*\n\n` +
         `Delete this empty category?\n\n` +
-        `*Category:* ${category}\n` +
+        `*Category:* ${escapedCategory}\n` +
         `*Total Media:* 0 items\n\n` +
         `⚠️ This action CANNOT be undone!`
       : `🗑️ *Confirm Category Deletion*\n\n` +
         `Delete the ENTIRE category including ALL its media?\n\n` +
-        `*Category:* ${category}\n` +
+        `*Category:* ${escapedCategory}\n` +
         `*Total Media:* ${mediaList.length} items\n\n` +
         `⚠️ This will permanently delete:\n` +
         `• All ${mediaList.length} media files\n` +
@@ -893,7 +902,7 @@ async function handleSendNow(ctx, mediaName) {
     
     await ctx.editMessageText(
       `📤 *Send Media Now*\n\n` +
-      `*Media:* ${mediaName}\n` +
+      `*Media:* ${escapeMarkdown(mediaName)}\n` +
       `*Type:* ${media.media_type}\n\n` +
       `Select the category where you want to send this media:`,
       {
@@ -937,14 +946,14 @@ async function handleSendToCategory(ctx, mediaName, category) {
       return;
     }
     
-    let message = `� *Send to Category: ${category}*\n\n`;
-    message += `*Media to send:* ${mediaName}\n`;
+    let message = `� *Send to Category: ${escapeMarkdown(category)}*\n\n`;
+    message += `*Media to send:* ${escapeMarkdown(mediaName)}\n`;
     message += `*Type:* ${media.media_type}\n\n`;
     message += `📋 *Media in this category (${categoryMedia.length}):*\n\n`;
     
     categoryMedia.forEach((m, index) => {
       if (index < 10) { // Show first 10 for brevity
-        message += `${index + 1}. ${m.name} (${m.media_type})\n`;
+        message += `${index + 1}. ${escapeMarkdown(m.name)} (${m.media_type})\n`;
       }
     });
     
@@ -953,7 +962,7 @@ async function handleSendToCategory(ctx, mediaName, category) {
     }
     
     message += `\n💡 To send this media, use the command:\n`;
-    message += `\`/send ${mediaName} <chat_id>\``;
+    message += `\`/send ${escapeMarkdown(mediaName)} <chat_id>\``;
     
     await ctx.editMessageText(message, {
       parse_mode: 'Markdown',
@@ -1059,7 +1068,7 @@ async function handleShowCategory(ctx, category) {
 
     if (realMedia.length === 0) {
       await ctx.editMessageText(
-        `📁 *Category: ${category}*\n\n` +
+        `📁 *Category: ${escapeMarkdown(category)}*\n\n` +
         `No media found in this category yet.\n\n` +
         `Upload media and assign it to this category to see it here!`,
         {
@@ -1075,7 +1084,7 @@ async function handleShowCategory(ctx, category) {
 
     // Edit header message — no buttons here, just info
     await ctx.editMessageText(
-      `📁 *Category: ${category}*\n\n` +
+      `📁 *Category: ${escapeMarkdown(category)}*\n\n` +
       `Total: ${realMedia.length} item(s) — sending below...`,
       { parse_mode: 'Markdown' }
     );
@@ -1108,7 +1117,7 @@ async function handleShowCategory(ctx, category) {
     }
 
     // Send bottom nav message — this is what the user sees at the bottom
-    let bottomText = `📁 *${category}* — ${realMedia.length} item(s)`;
+    let bottomText = `📁 *${escapeMarkdown(category)}* — ${realMedia.length} item(s)`;
     // All media are shown, no limit message needed
 
     await ctx.reply(bottomText, {
@@ -1192,7 +1201,7 @@ async function handleUploadToCategory(ctx, category) {
     ]);
     
     await ctx.editMessageText(
-      `📤 *Upload to Category: ${category}*\n\n` +
+      `📤 *Upload to Category: ${escapeMarkdown(category)}*\n\n` +
       `Please send the media you want to upload to this category.\n\n` +
       `Supported formats:\n` +
       `• 📹 Video\n` +
@@ -1231,10 +1240,10 @@ async function handleViewAllMedia(ctx) {
     message += `Total: ${mediaList.length} items\n\n`;
     
     mediaList.forEach((media, index) => {
-      message += `${index + 1}. *${media.name}*\n`;
+      message += `${index + 1}. *${escapeMarkdown(media.name)}*\n`;
       message += `   Type: ${media.media_type}`;
       if (media.category) {
-        message += ` | Category: ${media.category}`;
+        message += ` | Category: ${escapeMarkdown(media.category)}`;
       }
       if (media.caption) {
         const shortCaption = media.caption.length > 30 
@@ -1455,7 +1464,7 @@ async function handleCategorySelection(ctx, mediaName, category) {
     
     await ctx.editMessageText(
       `✅ *Media Saved!*\n\n` +
-      `*Category:* ${category}\n` +
+      `*Category:* ${escapeMarkdown(category)}\n` +
       `*Type:* ${mediaData.media_type}\n\n` +
       `What would you like to do?`,
       { 
@@ -1520,8 +1529,8 @@ async function handleSendCategoryPrompt(ctx, category) {
     const keyboard = Markup.inlineKeyboard(buttons);
     
     const message = whitelist.length > 0
-      ? `📤 *Send Category: ${category}*\n\nTotal media: ${mediaList.length} items\n\nSelect a channel/group or add new one:`
-      : `📤 *Send Category: ${category}*\n\nTotal media: ${mediaList.length} items\n\nNo channels/groups in whitelist yet. Add one or type chat ID manually.`;
+      ? `📤 *Send Category: ${escapeMarkdown(category)}*\n\nTotal media: ${mediaList.length} items\n\nSelect a channel/group or add new one:`
+      : `📤 *Send Category: ${escapeMarkdown(category)}*\n\nTotal media: ${mediaList.length} items\n\nNo channels/groups in whitelist yet. Add one or type chat ID manually.`;
     
     try {
       await ctx.editMessageText(message, {
