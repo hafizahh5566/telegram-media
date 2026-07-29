@@ -300,11 +300,11 @@ async function handleSendPrompt(ctx) {
   try {
     await ctx.answerCbQuery();
     
-    const categories = MediaService.getCategories().filter(cat => cat !== 'uncategorized');
+    const categories = MediaService.getCategories();
     
     if (categories.length === 0) {
       await ctx.editMessageText(
-        '📨 *Send Media*\n\nNo categories found. Please create categories first.',
+        '📨 *Send Media*\n\nNo categories found. Please upload media or create categories first.',
         getBackToMenuKeyboard()
       );
       return;
@@ -381,7 +381,7 @@ async function handleDeletePrompt(ctx) {
   try {
     await ctx.answerCbQuery();
     
-    const categories = MediaService.getCategories().filter(cat => cat !== 'uncategorized');
+    const categories = MediaService.getCategories();
     
     if (categories.length === 0) {
       await ctx.editMessageText(
@@ -1607,7 +1607,7 @@ async function handleSendAllCategoriesPrompt(ctx) {
   try {
     await ctx.answerCbQuery();
     
-    const categories = MediaService.getCategories().filter(cat => cat !== 'uncategorized');
+    const categories = MediaService.getCategories();
     
     if (categories.length === 0) {
       await ctx.editMessageText(
