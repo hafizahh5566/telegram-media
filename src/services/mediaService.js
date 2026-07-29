@@ -6,6 +6,16 @@
 const { getDatabase } = require('../database');
 const Logger = require('../utils/logger');
 
+/**
+ * Normalize category names so hashtag categories and manually selected
+ * categories stay consistent in the database and category views.
+ * @param {string} category - Raw category name
+ * @returns {string}
+ */
+function normalizeCategoryName(category) {
+  return String(category || 'uncategorized').trim().toLowerCase() || 'uncategorized';
+}
+
 class MediaService {
   /**
    * Save media to database
@@ -23,6 +33,7 @@ class MediaService {
   static saveMedia(mediaData) {
     try {
       const db = getDatabase();
+      const category = normalizeCategoryName(mediaData.category);
       const stmt = db.prepare(`
         INSERT INTO media (name, file_id, file_unique_id, media_type, caption, category, message_id, chat_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -34,7 +45,7 @@ class MediaService {
         mediaData.file_unique_id,
         mediaData.media_type,
         mediaData.caption || null,
-        mediaData.category || 'uncategorized',
+        category,
         mediaData.message_id || null,
         mediaData.chat_id || null
       );
@@ -198,7 +209,12 @@ class MediaService {
   static getCategories() {
     try {
       const db = getDatabase();
-      const stmt = db.prepare('SELECT DISTINCT category FROM media WHERE category IS NOT NULL ORDER BY category');
+      const stmt = db.prepare(`
+        SELECT DISTINCT LOWER(TRIM(category)) AS category
+        FROM media
+        WHERE category IS NOT NULL AND TRIM(category) != ''
+        ORDER BY category
+      `);
       return stmt.all().map(row => row.category);
     } catch (error) {
       Logger.error('Failed to get categories', error);
@@ -215,13 +231,14 @@ class MediaService {
   static getMediaByCategory(category, limit = 20) {
     try {
       const db = getDatabase();
+      const normalizedCategory = normalizeCategoryName(category);
       const stmt = db.prepare(`
         SELECT * FROM media 
-        WHERE category = ? 
+        WHERE LOWER(TRIM(category)) = ?
         ORDER BY created_at DESC 
         LIMIT ?
       `);
-      return stmt.all(category, limit);
+      return stmt.all(normalizedCategory, limit);
     } catch (error) {
       Logger.error('Failed to get media by category', error);
       throw error;
@@ -237,8 +254,9 @@ class MediaService {
   static deleteMediaFromCategory(name, category) {
     try {
       const db = getDatabase();
-      const stmt = db.prepare('DELETE FROM media WHERE name = ? AND category = ?');
-      const info = stmt.run(name, category);
+      const normalizedCategory = normalizeCategoryName(category);
+      const stmt = db.prepare('DELETE FROM media WHERE name = ? AND LOWER(TRIM(category)) = ?');
+      const info = stmt.run(name, normalizedCategory);
 
       if (info.changes > 0) {
         Logger.info(`Deleted media "${name}" from category "${category}"`);
@@ -260,8 +278,9 @@ class MediaService {
   static deleteCategory(category) {
     try {
       const db = getDatabase();
-      const stmt = db.prepare('DELETE FROM media WHERE category = ?');
-      const info = stmt.run(category);
+      const normalizedCategory = normalizeCategoryName(category);
+      const stmt = db.prepare('DELETE FROM media WHERE LOWER(TRIM(category)) = ?');
+      const info = stmt.run(normalizedCategory);
 
       Logger.info(`Deleted category "${category}" with ${info.changes} media items`);
       return info.changes;
@@ -280,11 +299,12 @@ class MediaService {
   static updateMediaCategory(name, category) {
     try {
       const db = getDatabase();
+      const normalizedCategory = normalizeCategoryName(category);
       const stmt = db.prepare('UPDATE media SET category = ? WHERE name = ?');
-      const info = stmt.run(category, name);
+      const info = stmt.run(normalizedCategory, name);
       
       if (info.changes > 0) {
-        Logger.info(`Updated media ${name} category to ${category}`);
+        Logger.info(`Updated media ${name} category to ${normalizedCategory}`);
         return true;
       }
       
@@ -303,13 +323,14 @@ class MediaService {
   static getNextCounterForCategory(category) {
     try {
       const db = getDatabase();
+      const normalizedCategory = normalizeCategoryName(category);
       // Count non-placeholder media in the category
       const stmt = db.prepare(`
         SELECT COUNT(*) as count 
         FROM media 
-        WHERE category = ? AND media_type != 'placeholder'
+        WHERE LOWER(TRIM(category)) = ? AND media_type != 'placeholder'
       `);
-      const result = stmt.get(category);
+      const result = stmt.get(normalizedCategory);
       return (result.count || 0) + 1;
     } catch (error) {
       Logger.error('Failed to get next counter for category', error);
@@ -400,5 +421,7 @@ class MediaService {
     }
   }
 }
+
+MediaService.normalizeCategoryName = normalizeCategoryName;
 
 module.exports = MediaService;

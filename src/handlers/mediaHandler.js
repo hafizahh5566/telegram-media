@@ -21,6 +21,42 @@ function escapeMarkdown(text) {
 }
 
 /**
+ * Build a horizontal progress bar for media processing messages.
+ * @param {number} current - Processed step count
+ * @param {number} total - Total step count
+ * @param {number} width - Number of bar blocks
+ * @returns {{percentage: number, bar: string}}
+ */
+function buildProgressBar(current, total, width = 10) {
+  const safeTotal = Math.max(Number(total) || 0, 1);
+  const safeCurrent = Math.min(Math.max(Number(current) || 0, 0), safeTotal);
+  const percentage = Math.round((safeCurrent / safeTotal) * 100);
+  const filledBlocks = Math.round((percentage / 100) * width);
+  const emptyBlocks = width - filledBlocks;
+
+  return {
+    percentage,
+    bar: `${'█'.repeat(filledBlocks)}${'░'.repeat(emptyBlocks)}`
+  };
+}
+
+/**
+ * Safely edit a progress message without failing the media flow.
+ * @param {Object} ctx - Telegraf context
+ * @param {number} messageId - Telegram message id
+ * @param {string} text - New message text
+ */
+async function safeEditProgress(ctx, messageId, text) {
+  if (!messageId) return;
+
+  try {
+    await ctx.telegram.editMessageText(ctx.chat.id, messageId, undefined, text, { parse_mode: 'Markdown' });
+  } catch (error) {
+    Logger.warn(`Failed to update media progress message: ${error.message}`);
+  }
+}
+
+/**
  * Extract media data from message
  * @param {Object} ctx - Telegraf context
  * @returns {Object|null} - Media data or null
@@ -101,6 +137,7 @@ function isForwardedMessage(message) {
  * @param {string} category - Category name
  */
 function ensureCategoryExists(category) {
+  category = MediaService.normalizeCategoryName(category);
   const categories = MediaService.getCategories();
   if (categories.includes(category)) return;
 
@@ -151,6 +188,7 @@ async function handleMedia(ctx) {
     
     const userId = ctx.from.id;
     const captionCategory = BulkForwardHandler.extractCategoryFromHashtag(mediaData.caption);
+    let progressMessageId = null;
     
     // BULK MODE: Detect forwarded messages and use batch processing
     if (isForwardedMessage(ctx.message)) {
@@ -158,11 +196,34 @@ async function handleMedia(ctx) {
       BulkForwardHandler.addToBatchQueue(userId, mediaData, ctx);
       return; // Batch handler will process this
     }
+
+    const initialProgress = buildProgressBar(1, 4);
+    const progressMsg = await ctx.reply(
+      `📥 *Receiving Media*\n\n` +
+      `${initialProgress.bar}\n` +
+      `Progress: ${initialProgress.percentage}%\n\n` +
+      `✅ Media detected\n` +
+      `⏳ Preparing save...`,
+      { parse_mode: 'Markdown', reply_to_message_id: ctx.message.message_id }
+    );
+    progressMessageId = progressMsg.message_id;
     
     // Auto-generate unique name based on media type
     const timestamp = Date.now();
     const autoName = `${mediaData.media_type}_${timestamp}`;
     mediaData.name = autoName;
+
+    const preparedProgress = buildProgressBar(2, 4);
+    await safeEditProgress(
+      ctx,
+      progressMessageId,
+      `📥 *Receiving Media*\n\n` +
+      `${preparedProgress.bar}\n` +
+      `Progress: ${preparedProgress.percentage}%\n\n` +
+      `✅ Media detected\n` +
+      `✅ Temporary name prepared\n` +
+      `⏳ Checking category...`
+    );
     
     // Store media data temporarily
     pendingMedia.set(userId, mediaData);
@@ -170,7 +231,20 @@ async function handleMedia(ctx) {
     // Check if user wants to upload to a specific category
     const categoryUploadState = pendingCategoryUpload.get(userId);
     if (categoryUploadState && categoryUploadState.category) {
-      const targetCategory = categoryUploadState.category;
+      const targetCategory = MediaService.normalizeCategoryName(categoryUploadState.category);
+
+      const categoryProgress = buildProgressBar(3, 4);
+      await safeEditProgress(
+        ctx,
+        progressMessageId,
+        `📥 *Receiving Media*\n\n` +
+        `${categoryProgress.bar}\n` +
+        `Progress: ${categoryProgress.percentage}%\n\n` +
+        `✅ Media detected\n` +
+        `✅ Temporary name prepared\n` +
+        `✅ Category selected: ${escapeMarkdown(targetCategory)}\n` +
+        `⏳ Saving...`
+      );
       
       // Get next counter for this category
       const counter = MediaService.getNextCounterForCategory(targetCategory);
@@ -182,6 +256,16 @@ async function handleMedia(ctx) {
       mediaData.message_id = ctx.message.message_id;
       mediaData.chat_id = String(ctx.chat.id);
       const savedName = MediaService.saveMedia(mediaData);
+
+      const doneProgress = buildProgressBar(4, 4);
+      await safeEditProgress(
+        ctx,
+        progressMessageId,
+        `📥 *Receiving Media*\n\n` +
+        `${doneProgress.bar}\n` +
+        `Progress: ${doneProgress.percentage}%\n\n` +
+        `✅ Saved to category: ${escapeMarkdown(targetCategory)}`
+      );
       
       // Auto-backup if enabled
       try {
@@ -232,6 +316,18 @@ async function handleMedia(ctx) {
     if (captionCategory) {
       ensureCategoryExists(captionCategory);
 
+      const categoryProgress = buildProgressBar(3, 4);
+      await safeEditProgress(
+        ctx,
+        progressMessageId,
+        `📥 *Receiving Media*\n\n` +
+        `${categoryProgress.bar}\n` +
+        `Progress: ${categoryProgress.percentage}%\n\n` +
+        `✅ Media detected\n` +
+        `✅ Hashtag category: ${escapeMarkdown(captionCategory)}\n` +
+        `⏳ Saving...`
+      );
+
       const counter = MediaService.getNextCounterForCategory(captionCategory);
       const finalName = `${captionCategory}_${counter}`;
 
@@ -240,6 +336,16 @@ async function handleMedia(ctx) {
       mediaData.message_id = ctx.message.message_id;
       mediaData.chat_id = String(ctx.chat.id);
       const savedName = MediaService.saveMedia(mediaData);
+
+      const doneProgress = buildProgressBar(4, 4);
+      await safeEditProgress(
+        ctx,
+        progressMessageId,
+        `📥 *Receiving Media*\n\n` +
+        `${doneProgress.bar}\n` +
+        `Progress: ${doneProgress.percentage}%\n\n` +
+        `✅ Saved to hashtag category: ${escapeMarkdown(captionCategory)}`
+      );
 
       // Auto-backup if enabled
       try {
@@ -282,6 +388,18 @@ async function handleMedia(ctx) {
     
     // Get existing categories
     const categories = MediaService.getCategories();
+
+    const categoryProgress = buildProgressBar(3, 4);
+    await safeEditProgress(
+      ctx,
+      progressMessageId,
+      `📥 *Receiving Media*\n\n` +
+      `${categoryProgress.bar}\n` +
+      `Progress: ${categoryProgress.percentage}%\n\n` +
+      `✅ Media detected\n` +
+      `✅ Temporary name prepared\n` +
+      `⏳ Waiting for category selection...`
+    );
     
     // Build category selection keyboard
     const buttons = [];

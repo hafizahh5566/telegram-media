@@ -23,6 +23,26 @@ const nextCategoryForUser = new Map(); // userId -> { category: string, timestam
 const CATEGORY_EXPIRY = 900000; // 15 minutes - category expires after 15 minutes
 
 /**
+ * Build a horizontal progress bar for Telegram status messages.
+ * @param {number} current - Processed item count
+ * @param {number} total - Total item count
+ * @param {number} width - Number of bar blocks
+ * @returns {{percentage: number, bar: string}}
+ */
+function buildProgressBar(current, total, width = 10) {
+  const safeTotal = Math.max(Number(total) || 0, 1);
+  const safeCurrent = Math.min(Math.max(Number(current) || 0, 0), safeTotal);
+  const percentage = Math.round((safeCurrent / safeTotal) * 100);
+  const filledBlocks = Math.round((percentage / 100) * width);
+  const emptyBlocks = width - filledBlocks;
+
+  return {
+    percentage,
+    bar: `${'█'.repeat(filledBlocks)}${'░'.repeat(emptyBlocks)}`
+  };
+}
+
+/**
  * Initialize duplicate cache from database
  */
 function initializeDuplicateCache() {
@@ -55,7 +75,7 @@ function extractCategoryFromHashtag(caption) {
   // Find hashtag pattern - convert to lowercase for consistency
   const hashtagMatch = caption.match(/#([a-zA-Z0-9_-]+)/);
   if (hashtagMatch && hashtagMatch[1]) {
-    return hashtagMatch[1].toLowerCase(); // Return lowercase for consistency
+    return MediaService.normalizeCategoryName(hashtagMatch[1]);
   }
   
   return null;
@@ -226,9 +246,12 @@ async function processBatch(userId) {
   
   try {
     // Send initial progress message
+    const initialProgress = buildProgressBar(0, stats.total);
     const progressMsg = await ctx.reply(
       `🔄 *Processing Batch Upload*\n\n` +
       `Total media: ${stats.total}\n` +
+      `${initialProgress.bar}\n` +
+      `Progress: 0/${stats.total} (${initialProgress.percentage}%)\n\n` +
       `Processing...`,
       { parse_mode: 'Markdown' }
     );
@@ -319,12 +342,13 @@ async function processBatch(userId) {
         
         // Update progress every PROGRESS_INTERVAL files
         if (i === 0 || (i + 1) % PROGRESS_INTERVAL === 0 || i === queue.length - 1) {
-          const progress = Math.round(((i + 1) / queue.length) * 100);
+          const progress = buildProgressBar(i + 1, queue.length);
           await safeEditProgress(
             ctx,
             batch,
             `🔄 *Processing Batch Upload*\n\n` +
-            `Progress: ${i + 1}/${queue.length} (${progress}%)\n` +
+            `${progress.bar}\n` +
+            `Progress: ${i + 1}/${queue.length} (${progress.percentage}%)\n` +
             `✅ Saved: ${stats.saved}\n` +
             `⏭ Skipped (duplicates): ${stats.skipped}\n` +
             `❌ Errors: ${stats.errors}`
@@ -341,6 +365,7 @@ async function processBatch(userId) {
     const processingTime = ((Date.now() - stats.startTime) / 1000).toFixed(1);
     
     // Send final summary
+    const finalProgress = buildProgressBar(queue.length, queue.length);
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback('📁 View Categories', 'view_categories')],
       [Markup.button.callback('📤 Send to Channel', 'send_prompt')],
@@ -351,6 +376,8 @@ async function processBatch(userId) {
       ctx,
       batch,
       `✅ *Batch Upload Complete!*\n\n` +
+      `${finalProgress.bar}\n` +
+      `Progress: ${queue.length}/${queue.length} (${finalProgress.percentage}%)\n\n` +
       `📊 *Summary:*\n` +
       `Total received: ${stats.total}\n` +
       `✅ Saved: ${stats.saved}\n` +
