@@ -11,6 +11,16 @@ const { Markup } = require('telegraf');
 const BulkForwardHandler = require('./bulkForwardHandler');
 
 /**
+ * Escape Telegram Markdown special characters in dynamic text.
+ * @param {string} text - Text to escape
+ * @returns {string}
+ */
+function escapeMarkdown(text) {
+  if (!text) return '';
+  return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+}
+
+/**
  * Extract media data from message
  * @param {Object} ctx - Telegraf context
  * @returns {Object|null} - Media data or null
@@ -185,9 +195,9 @@ async function handleMedia(ctx) {
     // Add existing categories (2 per row)
     for (let i = 0; i < categories.length; i += 2) {
       const row = [];
-      row.push(Markup.button.callback(`📁 ${categories[i]}`, `set_cat_${autoName}_${categories[i]}`));
+      row.push(Markup.button.callback(`📁 ${categories[i]}`, `set_cat::${autoName}::${categories[i]}`));
       if (i + 1 < categories.length) {
-        row.push(Markup.button.callback(`📁 ${categories[i + 1]}`, `set_cat_${autoName}_${categories[i + 1]}`));
+        row.push(Markup.button.callback(`📁 ${categories[i + 1]}`, `set_cat::${autoName}::${categories[i + 1]}`));
       }
       buttons.push(row);
     }
@@ -267,6 +277,7 @@ async function handleCategoryNameInput(ctx) {
 
       pendingMedia.delete(userId);
       pendingCategoryCreation.delete(userId);
+      const escapedCategoryName = escapeMarkdown(categoryName);
 
       const actionButtons = Markup.inlineKeyboard([
         [
@@ -277,8 +288,8 @@ async function handleCategoryNameInput(ctx) {
       ]);
 
       await ctx.reply(
-        `✅ Category "${categoryName}" created successfully!\n\n` +
-        `✅ *Media Saved to Category: ${categoryName}*\n\n` +
+        `✅ Category "${escapedCategoryName}" created successfully!\n\n` +
+        `✅ *Media Saved to Category: ${escapedCategoryName}*\n\n` +
         `*Name:* \`${savedName}\`\n` +
         `*Type:* ${mediaData.media_type}\n\n` +
         `What would you like to do?`,
@@ -333,8 +344,9 @@ async function handleCategoryNameInput(ctx) {
     const keyboard = Markup.inlineKeyboard(buttons);
     
     // Success message with updated category list
+    const escapedCategoryName = escapeMarkdown(categoryName);
     await ctx.reply(
-      `✅ Category "${categoryName}" created successfully!\n\n` +
+      `✅ Category "${escapedCategoryName}" created successfully!\n\n` +
       `📁 *Categories* (${updatedCategories.length})\n\n` +
       `Select a category to view its media, or add a new one:`,
       {
@@ -437,9 +449,9 @@ async function handleTextForMediaName(ctx) {
     // Add existing categories (2 per row)
     for (let i = 0; i < categories.length; i += 2) {
       const row = [];
-      row.push(Markup.button.callback(`📁 ${categories[i]}`, `set_cat_${mediaName}_${categories[i]}`));
+      row.push(Markup.button.callback(`📁 ${categories[i]}`, `set_cat::${mediaName}::${categories[i]}`));
       if (i + 1 < categories.length) {
-        row.push(Markup.button.callback(`📁 ${categories[i + 1]}`, `set_cat_${mediaName}_${categories[i + 1]}`));
+        row.push(Markup.button.callback(`📁 ${categories[i + 1]}`, `set_cat::${mediaName}::${categories[i + 1]}`));
       }
       buttons.push(row);
     }

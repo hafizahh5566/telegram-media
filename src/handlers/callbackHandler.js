@@ -52,6 +52,51 @@ function escapeMarkdown(text) {
 }
 
 /**
+ * Parse category-selection callback data.
+ * New format: set_cat::<mediaName>::<category>
+ * Legacy format: set_cat_<mediaName>_<category>
+ * @param {string} data - Callback data
+ * @param {Object|null} mediaData - Pending media data for safer legacy parsing
+ * @returns {{mediaName: string, category: string}|null}
+ */
+function parseSetCategoryCallback(data, mediaData = null) {
+  if (data.startsWith('set_cat::')) {
+    const payload = data.replace('set_cat::', '');
+    const separatorIndex = payload.indexOf('::');
+
+    if (separatorIndex === -1) {
+      return null;
+    }
+
+    return {
+      mediaName: payload.slice(0, separatorIndex),
+      category: payload.slice(separatorIndex + 2)
+    };
+  }
+
+  if (!data.startsWith('set_cat_')) {
+    return null;
+  }
+
+  const payload = data.replace('set_cat_', '');
+
+  // Safer legacy parsing: use the pending media name as prefix when available,
+  // because media/category names commonly contain underscores.
+  if (mediaData?.name && payload.startsWith(`${mediaData.name}_`)) {
+    return {
+      mediaName: mediaData.name,
+      category: payload.slice(mediaData.name.length + 1)
+    };
+  }
+
+  const parts = payload.split('_');
+  return {
+    mediaName: parts[0],
+    category: parts.slice(1).join('_')
+  };
+}
+
+/**
  * Delete tracked category media messages for a user (cleanup when leaving a category)
  * @param {Object} ctx - Telegraf context
  */
@@ -1279,11 +1324,16 @@ async function handleCallbackQuery(ctx) {
   
   try {
     // Category selection handlers
-    if (data.startsWith('set_cat_')) {
-      const parts = data.split('_');
-      const mediaName = parts[2];
-      const category = parts.slice(3).join('_');
-      await handleCategorySelection(ctx, mediaName, category);
+    if (data.startsWith('set_cat_') || data.startsWith('set_cat::')) {
+      const { pendingMedia } = require('./mediaHandler');
+      const parsed = parseSetCategoryCallback(data, pendingMedia.get(ctx.from.id));
+
+      if (!parsed) {
+        await ctx.answerCbQuery('❌ Invalid category selection');
+        return;
+      }
+
+      await handleCategorySelection(ctx, parsed.mediaName, parsed.category);
     } else if (data.startsWith('skip_cat_')) {
       const mediaName = data.replace('skip_cat_', '');
       await handleCategorySelection(ctx, mediaName, 'uncategorized');
