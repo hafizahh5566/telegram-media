@@ -9,6 +9,7 @@ const Logger = require('../utils/logger');
 const { getMediaUploadedKeyboard } = require('../utils/keyboards');
 const { Markup } = require('telegraf');
 const BulkForwardHandler = require('./bulkForwardHandler');
+const { sendMediaWithRetry, callTelegramWithRetry, sleep, getSendDelayMs } = require('../utils/telegramRateLimit');
 
 /**
  * Escape Telegram Markdown special characters in dynamic text.
@@ -799,18 +800,13 @@ async function handleChatIdForSending(ctx, uploadState) {
           // Add protect_content and disable sender name
           sendOptions.protect_content = false;
           
-          if (media.media_type === 'video') {
-            await ctx.telegram.sendVideo(chatId, media.file_id, sendOptions);
-          } else if (media.media_type === 'photo') {
-            await ctx.telegram.sendPhoto(chatId, media.file_id, sendOptions);
-          } else if (media.media_type === 'document') {
-            await ctx.telegram.sendDocument(chatId, media.file_id, sendOptions);
-          } else if (media.media_type === 'animation') {
-            await ctx.telegram.sendAnimation(chatId, media.file_id, sendOptions);
-          }
+          await sendMediaWithRetry(ctx.telegram, chatId, media, sendOptions, {
+            logger: Logger,
+            label: media.name
+          });
           
           successCount++;
-          await new Promise(resolve => setTimeout(resolve, 100)); // Rate limiting
+          await sleep(getSendDelayMs()); // Safe Telegram rate limiting
         } catch (sendError) {
           Logger.error(`Error sending media ${media.name}`, sendError);
           errorCount++;
@@ -906,7 +902,11 @@ async function handleChatIdForSending(ctx, uploadState) {
         if (topicId) {
           headerOptions.message_thread_id = parseInt(topicId);
         }
-        await ctx.telegram.sendMessage(chatId, `━━━━━━━━━━━━━━━━\n📁 *${escapeMarkdown(category.toUpperCase())}*\n━━━━━━━━━━━━━━━━`, headerOptions);
+        await callTelegramWithRetry(
+          () => ctx.telegram.sendMessage(chatId, `━━━━━━━━━━━━━━━━\n📁 *${escapeMarkdown(category.toUpperCase())}*\n━━━━━━━━━━━━━━━━`, headerOptions),
+          { logger: Logger, label: `category header ${category}` }
+        );
+        await sleep(getSendDelayMs());
         
         for (const media of mediaList) {
           try {
@@ -917,18 +917,13 @@ async function handleChatIdForSending(ctx, uploadState) {
               sendOptions.message_thread_id = parseInt(topicId);
             }
             
-            if (media.media_type === 'video') {
-              await ctx.telegram.sendVideo(chatId, media.file_id, sendOptions);
-            } else if (media.media_type === 'photo') {
-              await ctx.telegram.sendPhoto(chatId, media.file_id, sendOptions);
-            } else if (media.media_type === 'document') {
-              await ctx.telegram.sendDocument(chatId, media.file_id, sendOptions);
-            } else if (media.media_type === 'animation') {
-              await ctx.telegram.sendAnimation(chatId, media.file_id, sendOptions);
-            }
+            await sendMediaWithRetry(ctx.telegram, chatId, media, sendOptions, {
+              logger: Logger,
+              label: media.name
+            });
             
             totalSuccess++;
-            await new Promise(resolve => setTimeout(resolve, 100)); // Rate limiting
+            await sleep(getSendDelayMs()); // Safe Telegram rate limiting
           } catch (sendError) {
             Logger.error(`Error sending media ${media.name}`, sendError);
             totalFailed++;

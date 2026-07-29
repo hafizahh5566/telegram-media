@@ -6,6 +6,7 @@
 const { Markup } = require('telegraf');
 const MediaService = require('../services/mediaService');
 const Logger = require('../utils/logger');
+const { sendMediaWithRetry, sleep, getSendDelayMs } = require('../utils/telegramRateLimit');
 
 // Store bulk send state
 const bulkSendState = new Map();
@@ -342,19 +343,14 @@ async function handleConfirmBulkSend(ctx) {
         try {
           const sendOptions = {};
           
-          if (media.media_type === 'video') {
-            await ctx.telegram.sendVideo(chatId, media.file_id, sendOptions);
-          } else if (media.media_type === 'photo') {
-            await ctx.telegram.sendPhoto(chatId, media.file_id, sendOptions);
-          } else if (media.media_type === 'document') {
-            await ctx.telegram.sendDocument(chatId, media.file_id, sendOptions);
-          } else if (media.media_type === 'animation') {
-            await ctx.telegram.sendAnimation(chatId, media.file_id, sendOptions);
-          }
+          await sendMediaWithRetry(ctx.telegram, chatId, media, sendOptions, {
+            logger: Logger,
+            label: `${media.name} to ${chatId}`
+          });
 
           chatSent++;
           totalSent++;
-          await new Promise(resolve => setTimeout(resolve, 100)); // Rate limiting
+          await sleep(getSendDelayMs()); // Safe Telegram rate limiting
         } catch (error) {
           Logger.error(`Error sending to ${chatId}:`, error);
           chatFailed++;

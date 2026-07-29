@@ -6,6 +6,7 @@
 const { Markup } = require('telegraf');
 const MediaService = require('../services/mediaService');
 const Logger = require('../utils/logger');
+const { sendMediaWithRetry, sleep, getSendDelayMs } = require('../utils/telegramRateLimit');
 
 // Store pending whitelist additions
 const pendingWhitelistAdd = new Map();
@@ -226,15 +227,10 @@ async function handleSendCategoryWithWhitelist(ctx, category, whitelistId) {
           sendOptions.message_thread_id = parseInt(entry.topic_id);
         }
         
-        if (media.media_type === 'video') {
-          await ctx.telegram.sendVideo(entry.chat_id, media.file_id, sendOptions);
-        } else if (media.media_type === 'photo') {
-          await ctx.telegram.sendPhoto(entry.chat_id, media.file_id, sendOptions);
-        } else if (media.media_type === 'document') {
-          await ctx.telegram.sendDocument(entry.chat_id, media.file_id, sendOptions);
-        } else if (media.media_type === 'animation') {
-          await ctx.telegram.sendAnimation(entry.chat_id, media.file_id, sendOptions);
-        }
+        await sendMediaWithRetry(ctx.telegram, entry.chat_id, media, sendOptions, {
+          logger: Logger,
+          label: `${media.name} to ${entry.name}`
+        });
         
         successCount++;
         
@@ -242,7 +238,7 @@ async function handleSendCategoryWithWhitelist(ctx, category, whitelistId) {
         if (successCount % 10 === 0) {
           await ctx.telegram.sendChatAction(entry.chat_id, 'upload_document');
         }
-        await new Promise(resolve => setTimeout(resolve, 100)); // Rate limiting
+        await sleep(getSendDelayMs()); // Safe Telegram rate limiting
       } catch (sendError) {
         Logger.error(`Error sending media ${media.name}`, sendError);
         errorCount++;

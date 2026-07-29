@@ -57,6 +57,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .forever/
 .pm2/
 .node_repl_history
+.envrc
 
 # Build / coverage / cache
 dist/
@@ -67,6 +68,7 @@ coverage/
 .eslintcache
 .parcel-cache/
 .turbo/
+.vite/
 *.tsbuildinfo
 
 # Local backups / temporary files
@@ -77,9 +79,12 @@ downloads/
 exports/
 media/
 uploads/
+sessions/
+storage/
 *.bak
 *.bak2
 *.backup
+*.orig
 *.tmp
 *.temp
 tmp/
