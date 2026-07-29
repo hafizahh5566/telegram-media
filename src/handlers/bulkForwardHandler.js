@@ -11,7 +11,8 @@ const { Markup } = require('telegraf');
 // Batch processing system
 const batchQueues = new Map(); // userId -> { queue: [], timer: null, stats: {} }
 const BATCH_TIMEOUT = 3000; // 3 seconds to collect batch before processing
-const PROGRESS_INTERVAL = 50; // Report progress every 50 files
+const PROGRESS_INTERVAL = 10; // Report progress every 10 files so users don't think it is stuck
+const TELEGRAM_OPERATION_TIMEOUT = 20000; // Prevent Telegram API calls from blocking batch forever
 
 // Duplicate detection cache
 const duplicateCache = new Map(); // file_unique_id -> true
@@ -103,6 +104,56 @@ function getNextCategoryForUser(userId) {
  */
 function clearNextCategoryForUser(userId) {
   nextCategoryForUser.delete(userId);
+}
+
+/**
+ * Add a timeout to async operations that depend on Telegram/network calls.
+ * This prevents batch processing from looking stuck forever when Telegram API
+ * or an auto-backup channel is slow/unreachable.
+ * @param {Promise} promise - Promise to wrap
+ * @param {number} timeoutMs - Timeout in milliseconds
+ * @param {string} label - Operation label for logs/errors
+ * @returns {Promise<*>}
+ */
+function withTimeout(promise, timeoutMs, label) {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs / 1000}s`));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId);
+  });
+}
+
+/**
+ * Safely edit the batch progress message without breaking the upload loop.
+ * @param {Object} ctx - Telegraf context
+ * @param {Object} batch - Batch state
+ * @param {string} text - Message text
+ * @param {Object} extra - Extra Telegram options
+ */
+async function safeEditProgress(ctx, batch, text, extra = {}) {
+  if (!batch.progressMessageId) return;
+
+  try {
+    await withTimeout(
+      ctx.telegram.editMessageText(
+        ctx.chat.id,
+        batch.progressMessageId,
+        undefined,
+        text,
+        { parse_mode: 'Markdown', ...extra }
+      ),
+      TELEGRAM_OPERATION_TIMEOUT,
+      'Editing batch progress message'
+    );
+  } catch (error) {
+    // Ignore harmless Telegram edit errors and keep processing media.
+    Logger.warn(`Failed to update batch progress message: ${error.message}`);
+  }
 }
 
 /**
@@ -256,25 +307,27 @@ async function processBatch(userId) {
         try {
           const backupStatus = BackupService.isAutoBackupReady();
           if (backupStatus.enabled && backupStatus.channelId) {
-            await BackupService.backupMediaToChannel(ctx.telegram, backupStatus.channelId, mediaData);
+            await withTimeout(
+              BackupService.backupMediaToChannel(ctx.telegram, backupStatus.channelId, mediaData),
+              TELEGRAM_OPERATION_TIMEOUT,
+              `Auto-backup for ${savedName}`
+            );
           }
         } catch (backupError) {
           Logger.error(`Backup failed for ${savedName}`, backupError);
         }
         
         // Update progress every PROGRESS_INTERVAL files
-        if ((i + 1) % PROGRESS_INTERVAL === 0 || i === queue.length - 1) {
+        if (i === 0 || (i + 1) % PROGRESS_INTERVAL === 0 || i === queue.length - 1) {
           const progress = Math.round(((i + 1) / queue.length) * 100);
-          await ctx.telegram.editMessageText(
-            ctx.chat.id,
-            batch.progressMessageId,
-            undefined,
+          await safeEditProgress(
+            ctx,
+            batch,
             `🔄 *Processing Batch Upload*\n\n` +
             `Progress: ${i + 1}/${queue.length} (${progress}%)\n` +
             `✅ Saved: ${stats.saved}\n` +
             `⏭ Skipped (duplicates): ${stats.skipped}\n` +
-            `❌ Errors: ${stats.errors}`,
-            { parse_mode: 'Markdown' }
+            `❌ Errors: ${stats.errors}`
           );
         }
         
@@ -294,10 +347,9 @@ async function processBatch(userId) {
       [Markup.button.callback('🏠 Main Menu', 'main_menu')]
     ]);
     
-    await ctx.telegram.editMessageText(
-      ctx.chat.id,
-      batch.progressMessageId,
-      undefined,
+    await safeEditProgress(
+      ctx,
+      batch,
       `✅ *Batch Upload Complete!*\n\n` +
       `📊 *Summary:*\n` +
       `Total received: ${stats.total}\n` +
@@ -306,7 +358,7 @@ async function processBatch(userId) {
       `❌ Errors: ${stats.errors}\n\n` +
       `⏱ Processing time: ${processingTime}s\n\n` +
       `💡 *Tip:* Use hashtags like #promo in captions to auto-assign categories!`,
-      { parse_mode: 'Markdown', ...keyboard }
+      keyboard
     );
     
     Logger.info(`Batch complete for user ${userId}: ${stats.saved} saved, ${stats.skipped} skipped, ${stats.errors} errors`);
@@ -347,7 +399,7 @@ async function handleBulkModeCommand(ctx) {
         `*Features:*\n` +
         `✅ Auto-category from hashtags (#promo → promo)\n` +
         `✅ Duplicate detection (skip existing files)\n` +
-        `✅ Progress tracking (update every 50 files)\n` +
+        `✅ Progress tracking (update every 10 files)\n` +
         `✅ Batch processing (process after 3s idle)\n\n` +
         `💡 *How to use:*\n` +
         `1. Forward multiple media from any channel\n` +
