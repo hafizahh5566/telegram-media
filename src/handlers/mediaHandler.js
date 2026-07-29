@@ -295,9 +295,9 @@ async function handleMedia(ctx) {
       ]);
       
       await ctx.reply(
-        `✅ *Media Saved to Category: ${targetCategory}*\n\n` +
+        `✅ *Media Saved to Category: ${escapeMarkdown(targetCategory)}*\n\n` +
         `*Name:* \`${savedName}\`\n` +
-        `*Type:* ${mediaData.media_type}\n\n` +
+        `*Type:* ${escapeMarkdown(mediaData.media_type)}\n\n` +
         `What would you like to do?`,
         { 
           parse_mode: 'Markdown',
@@ -373,7 +373,7 @@ async function handleMedia(ctx) {
       await ctx.reply(
         `✅ *Media Saved to Category: ${escapedCategory}*\n\n` +
         `*Name:* \`${savedName}\`\n` +
-        `*Type:* ${mediaData.media_type}\n\n` +
+        `*Type:* ${escapeMarkdown(mediaData.media_type)}\n\n` +
         `🏷 Category detected from hashtag in caption/message.`,
         {
           parse_mode: 'Markdown',
@@ -503,7 +503,7 @@ async function handleCategoryNameInput(ctx) {
         `✅ Category "${escapedCategoryName}" created successfully!\n\n` +
         `✅ *Media Saved to Category: ${escapedCategoryName}*\n\n` +
         `*Name:* \`${savedName}\`\n` +
-        `*Type:* ${mediaData.media_type}\n\n` +
+        `*Type:* ${escapeMarkdown(mediaData.media_type)}\n\n` +
         `What would you like to do?`,
         {
           parse_mode: 'Markdown',
@@ -688,7 +688,7 @@ async function handleTextForMediaName(ctx) {
     Logger.error('Error saving media with name', error);
     
     if (error.message.includes('already exists')) {
-      await ctx.reply(`❌ ${error.message}\n\nPlease choose a different name:`);
+      await ctx.reply(`❌ ${escapeMarkdown(error.message)}\n\nPlease choose a different name:`, { parse_mode: 'Markdown' });
     } else {
       await ctx.reply('❌ An error occurred while saving media');
       pendingMedia.delete(userId);
@@ -733,6 +733,7 @@ async function handleChatIdForSending(ctx, uploadState) {
     if (uploadState.sendingCategory) {
       // Send single category
       const category = uploadState.sendingCategory;
+      const escapedCategory = escapeMarkdown(category);
       const mediaList = MediaService.getMediaByCategory(category, 1000).filter(m => m.media_type !== 'placeholder');
       
       if (mediaList.length === 0) {
@@ -742,7 +743,7 @@ async function handleChatIdForSending(ctx, uploadState) {
       }
       
       const progressMsg = await ctx.reply(
-        `📤 *Sending: ${category}*\n\n⏳ Memulai...\n\n🔄 0%`,
+        `📤 *Sending: ${escapedCategory}*\n\n⏳ Memulai...\n\n🔄 0%`,
         { parse_mode: 'Markdown' }
       );
       
@@ -770,7 +771,7 @@ async function handleChatIdForSending(ctx, uploadState) {
               ctx.chat.id,
               progressMsg.message_id,
               undefined,
-              `📤 *Sending: ${category}*\n\n` +
+              `📤 *Sending: ${escapedCategory}*\n\n` +
               `${progressBar}\n\n` +
               `🔄 ${percentage}%\n\n` +
               `✅ Berhasil: ${successCount}\n` +
@@ -829,7 +830,7 @@ async function handleChatIdForSending(ctx, uploadState) {
       
       await ctx.reply(
         `✅ *Sending Complete!*\n\n` +
-        `Category: ${category}\n` +
+        `Category: ${escapedCategory}\n` +
         `Chat ID: \`${chatId}\`\n` +
         (topicId ? `Topic ID: \`${topicId}\`\n` : '') +
         `Success: ${successCount}\n` +
@@ -905,7 +906,7 @@ async function handleChatIdForSending(ctx, uploadState) {
         if (topicId) {
           headerOptions.message_thread_id = parseInt(topicId);
         }
-        await ctx.telegram.sendMessage(chatId, `━━━━━━━━━━━━━━━━\n📁 *${category.toUpperCase()}*\n━━━━━━━━━━━━━━━━`, headerOptions);
+        await ctx.telegram.sendMessage(chatId, `━━━━━━━━━━━━━━━━\n📁 *${escapeMarkdown(category.toUpperCase())}*\n━━━━━━━━━━━━━━━━`, headerOptions);
         
         for (const media of mediaList) {
           try {
@@ -965,7 +966,10 @@ async function handleChatIdForSending(ctx, uploadState) {
     
   } catch (error) {
     Logger.error('Error handling chat_id for sending', error);
-    await ctx.reply(`❌ Error sending media: ${error.message}\n\nMake sure the bot is a member/admin of the target chat.`);
+    await ctx.reply(
+      `❌ Error sending media: ${escapeMarkdown(error.message)}\n\nMake sure the bot is a member/admin of the target chat.`,
+      { parse_mode: 'Markdown' }
+    );
     pendingCategoryUpload.delete(userId);
   }
 }

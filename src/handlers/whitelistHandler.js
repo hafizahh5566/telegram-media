@@ -11,6 +11,16 @@ const Logger = require('../utils/logger');
 const pendingWhitelistAdd = new Map();
 
 /**
+ * Escape Telegram Markdown special characters in dynamic text.
+ * @param {string} text - Text to escape
+ * @returns {string}
+ */
+function escapeMarkdown(text) {
+  if (!text) return '';
+  return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+}
+
+/**
  * Handle add to whitelist button
  * @param {Object} ctx - Telegraf context
  */
@@ -84,7 +94,7 @@ async function handleWhitelistInput(ctx) {
       ]);
       
       await ctx.reply(
-        `✅ Name saved: *${input}*\n\n` +
+        `✅ Name saved: *${escapeMarkdown(input)}*\n\n` +
         `Step 2 of 2: Choose one option:\n\n` +
         `📲 *Option 1:* Forward a message from that channel/group to me\n` +
         `   (Bot will auto-extract the chat ID)\n\n` +
@@ -143,7 +153,7 @@ async function handleWhitelistInput(ctx) {
         
         await ctx.reply(
           `✅ *Successfully Added to Whitelist!*\n\n` +
-          `Name: ${state.name}\n` +
+          `Name: ${escapeMarkdown(state.name)}\n` +
           `Chat ID: \`${state.chat_id}\`\n` +
           `Topic ID: \`${input}\`\n\n` +
           `You can now use this for sending media to this specific topic.`,
@@ -247,8 +257,8 @@ async function handleSendCategoryWithWhitelist(ctx, category, whitelistId) {
     
     await ctx.reply(
       `✅ *Sending Complete!*\n\n` +
-      `Category: ${category}\n` +
-      `Destination: ${entry.name}\n` +
+      `Category: ${escapeMarkdown(category)}\n` +
+      `Destination: ${escapeMarkdown(entry.name)}\n` +
       `Success: ${successCount}\n` +
       `Failed: ${errorCount}`,
       { parse_mode: 'Markdown', ...keyboard }
@@ -258,7 +268,7 @@ async function handleSendCategoryWithWhitelist(ctx, category, whitelistId) {
     
   } catch (error) {
     Logger.error('Error sending category with whitelist', error);
-    await ctx.reply(`❌ Error sending media: ${error.message}`);
+    await ctx.reply(`❌ Error sending media: ${escapeMarkdown(error.message)}`, { parse_mode: 'Markdown' });
   }
 }
 
@@ -277,7 +287,7 @@ async function handleManualSendCategory(ctx, category) {
     ]);
     
     await ctx.editMessageText(
-      `📤 *Send Category: ${category}*\n\n` +
+      `📤 *Send Category: ${escapeMarkdown(category)}*\n\n` +
       `Please type the chat ID (and optional topic ID).\n\n` +
       `*Format:*\n` +
       `• For regular chat: \`-1001234567890\`\n` +
@@ -346,9 +356,9 @@ async function handleForwardedMessage(ctx) {
       
       await ctx.reply(
         `✅ *Successfully Added to Whitelist!*\n\n` +
-        `Name: ${state.name}\n` +
+        `Name: ${escapeMarkdown(state.name)}\n` +
         `Chat ID: \`${chatId}\`\n` +
-        `Type: ${chatType}\n\n` +
+        `Type: ${escapeMarkdown(chatType)}\n\n` +
         `You can now use this for sending media.`,
         { parse_mode: 'Markdown' }
       );

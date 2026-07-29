@@ -8,12 +8,22 @@ const Logger = require('../utils/logger');
 const config = require('../config');
 
 /**
+ * Escape Telegram Markdown special characters in dynamic text.
+ * @param {string} text - Text to escape
+ * @returns {string}
+ */
+function escapeMarkdown(text) {
+  if (!text) return '';
+  return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+}
+
+/**
  * Send media based on type
  * @param {Object} ctx - Telegraf context
  * @param {Object} media - Media object from database
  */
 async function sendMediaItem(ctx, media) {
-  const caption = `*Name:* ${media.name}\n*Type:* ${media.media_type}${media.category ? `\n*Category:* ${media.category}` : ''}${media.caption ? `\n*Caption:* ${media.caption}` : ''}`;
+  const caption = `*Name:* ${escapeMarkdown(media.name)}\n*Type:* ${escapeMarkdown(media.media_type)}${media.category ? `\n*Category:* ${escapeMarkdown(media.category)}` : ''}${media.caption ? `\n*Caption:* ${escapeMarkdown(media.caption)}` : ''}`;
   
   const options = {
     caption: caption,

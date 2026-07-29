@@ -11,6 +11,16 @@ const Logger = require('../utils/logger');
 const bulkSendState = new Map();
 
 /**
+ * Escape Telegram Markdown special characters in dynamic text.
+ * @param {string} text - Text to escape
+ * @returns {string}
+ */
+function escapeMarkdown(text) {
+  if (!text) return '';
+  return String(text).replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+}
+
+/**
  * Handle bulk send menu
  * @param {Object} ctx - Telegraf context
  */
@@ -112,7 +122,7 @@ async function handleBulkCategorySelect(ctx, category) {
     });
 
     await ctx.editMessageText(
-      `📤 *Bulk Send: ${category}*\n\n` +
+      `📤 *Bulk Send: ${escapeMarkdown(category)}*\n\n` +
       `Kirim daftar Chat ID yang dipisahkan dengan koma.\n\n` +
       `*Format:*\n` +
       `\`-1001234567890, -1009876543210, -1001111222333\`\n\n` +
@@ -231,7 +241,7 @@ async function handleBulkSendChatIds(ctx) {
 
     await ctx.reply(
       `📤 *Konfirmasi Bulk Send*\n\n` +
-      `Type: ${state.type === 'category' ? `Kategori "${state.category}"` : 'Semua Media'}\n` +
+      `Type: ${state.type === 'category' ? `Kategori "${escapeMarkdown(state.category)}"` : 'Semua Media'}\n` +
       `Media: ${mediaCount} items\n` +
       `Target: ${chatIds.length} grup/channel\n\n` +
       `Chat IDs:\n${chatIds.map(id => `• \`${id}\``).join('\n')}\n\n` +
@@ -395,7 +405,7 @@ async function handleConfirmBulkSend(ctx) {
   } catch (error) {
     Logger.error('Error confirming bulk send', error);
     await ctx.editMessageText(
-      `❌ *Bulk Send Gagal*\n\n${error.message}`,
+      `❌ *Bulk Send Gagal*\n\n${escapeMarkdown(error.message)}`,
       {
         parse_mode: 'Markdown',
         ...Markup.inlineKeyboard([

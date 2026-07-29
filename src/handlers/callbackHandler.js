@@ -1099,7 +1099,8 @@ async function handleShowCategory(ctx, category) {
   try {
     await ctx.answerCbQuery();
 
-    const mediaList = MediaService.getMediaByCategory(category, 50);
+    const categoryMediaLimit = 10;
+    const mediaList = MediaService.getMediaByCategory(category, categoryMediaLimit);
 
     // Filter out placeholder media
     const realMedia = mediaList.filter(m => m.media_type !== 'placeholder');
@@ -1130,12 +1131,12 @@ async function handleShowCategory(ctx, category) {
     // Edit header message — no buttons here, just info
     await ctx.editMessageText(
       `📁 *Category: ${escapeMarkdown(category)}*\n\n` +
-      `Total: ${realMedia.length} item(s) — sending below...`,
+      `Showing up to ${categoryMediaLimit} item(s) — sending below...`,
       { parse_mode: 'Markdown' }
     );
 
     // Send each media file and collect their message IDs for later cleanup
-    const mediaToSend = realMedia; // Show all media, no limit
+    const mediaToSend = realMedia;
     const mediaMessageIds = [];
 
     for (const media of mediaToSend) {
@@ -1162,8 +1163,7 @@ async function handleShowCategory(ctx, category) {
     }
 
     // Send bottom nav message — this is what the user sees at the bottom
-    let bottomText = `📁 *${escapeMarkdown(category)}* — ${realMedia.length} item(s)`;
-    // All media are shown, no limit message needed
+    let bottomText = `📁 *${escapeMarkdown(category)}* — showing ${realMedia.length} item(s)`;
 
     await ctx.reply(bottomText, {
       parse_mode: 'Markdown',
